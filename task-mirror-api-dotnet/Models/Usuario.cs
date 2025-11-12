@@ -1,18 +1,39 @@
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TaskMirror.Models;
 
+[Table("tbl_usuarios")]
 public class Usuario
 {
-    public int Id { get; set; }
-    public string Username { get; set; } = default!;
-    public string PasswordHash { get; set; } = default!;
-    public string Role { get; set; } = "Colaborador"; // "Lider" ou "Colaborador"
-    public string Funcao { get; set; } = default!;
+    [Key]
+    [Column("id_usuario")]
+    public int IdUsuario { get; set; }
 
-    public int? IdLider { get; set; }
-    public Usuario? Lider { get; set; }
+    [Required]
+    [Column("username")]
+    [MaxLength(100)]
+    public string Username { get; set; } = null!;
+
+    [Required]
+    [Column("password")]
+    [MaxLength(255)]
+    public string Password { get; set; } = null!;
+
+    [Required]
+    [Column("role_usuario")]
+    [MaxLength(100)]
+    public string RoleUsuario { get; set; } = null!;
+
+    [Required]
+    [Column("funcao")]
+    [MaxLength(100)]
+    public string Funcao { get; set; } = null!;
+
+    [Column("id_lider")]
+    public int? IdLider { get; set; }         // nullable para SetNull
+
+    public Usuario? Lider { get; set; }       // self-join
     public ICollection<Usuario> Subordinados { get; set; } = new List<Usuario>();
-
-    public ICollection<Tarefa> Tarefas { get; set; } = new List<Tarefa>();
 }

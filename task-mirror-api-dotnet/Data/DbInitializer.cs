@@ -1,60 +1,159 @@
-using System.Linq;
+﻿using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using TaskMirror.Models;
 
-namespace TaskMirror.Data;
-
-public static class DbInitializer
+namespace TaskMirror.Data
 {
-    public static void Seed(TaskMirrorDbContext db)
+    public static class DbInitializer
     {
-        if (db.Usuarios.Any()) return;
-
-        var status = new[]
+        public static void Seed(TaskMirrorDbContext db)
         {
-            new StatusTarefa{ Nome = "Aberta" },
-            new StatusTarefa{ Nome = "Em Progresso" },
-            new StatusTarefa{ Nome = "Conclu�da" },
-            new StatusTarefa{ Nome = "Atrasada" },
-        };
-        db.StatusesTarefa.AddRange(status);
+            // Se você já chama Migrate() no Program.cs, pode comentar a linha abaixo.
+            db.Database.Migrate();
 
-        var tipos = new[]
-        {
-            new TipoTarefa{ Nome = "Curta" },
-            new TipoTarefa{ Nome = "M�dia" },
-            new TipoTarefa{ Nome = "Longa" },
-        };
-        db.TiposTarefa.AddRange(tipos);
+            // ----------------------------------------------------------
+            // Helpers que NÃO projetam True/False no SQL (compat. Oracle)
+            // ----------------------------------------------------------
+            static bool HasAny<TEntity>(IQueryable<TEntity> q) where TEntity : class
+            {
+                // Gera: SELECT 1 FROM ... FETCH FIRST 1 ROWS ONLY
+                var one = q.AsNoTracking().Select(_ => 1).Take(1).FirstOrDefault();
+                return one == 1;
+            }
 
-        var lider = new Usuario { Username = "lider", PasswordHash = "hash", Role = "Lider", Funcao = "Coordena��o" };
-        var col1 = new Usuario { Username = "alice", PasswordHash = "hash", Role = "Colaborador", Funcao = "Dev", Lider = lider };
-        var col2 = new Usuario { Username = "gus", PasswordHash = "hash", Role = "Colaborador", Funcao = "Dev", Lider = lider };
-        var col3 = new Usuario { Username = "victor", PasswordHash = "hash", Role = "Colaborador", Funcao = "Dev", Lider = lider };
+            static bool HasStatusByName(TaskMirrorDbContext ctx, string nome)
+            {
+                // Comparação case-insensitive sem retornar True/False
+                var nomeUP = nome.Trim().ToUpper();
+                var one = ctx.StatusesTarefa
+                    .AsNoTracking()
+                    .Where(s => s.Nome.ToUpper() == nomeUP)
+                    .Select(_ => 1)
+                    .Take(1)
+                    .FirstOrDefault();
+                return one == 1;
+            }
 
-        db.Usuarios.AddRange(lider, col1, col2, col3);
-        db.SaveChanges();
+            // ----------------------------------------------------------
+            // TIPOS DE TAREFA (seed simples)
+            // ----------------------------------------------------------
+            if (!HasAny(db.TiposTarefa))
+            {
+                db.TiposTarefa.AddRange(
+                    new TipoTarefa { Nome = "Desenvolvimento" },
+                    new TipoTarefa { Nome = "Correção" },
+                    new TipoTarefa { Nome = "Documentação" }
+                );
+                db.SaveChanges();
+            }
 
-        var t1 = new Tarefa
-        {
-            Titulo = "Implementar endpoint",
-            Descricao = "GET /tarefas",
-            TempoEstimadoMin = 120,
-            UsuarioId = col3.Id,
-            LiderId = lider.Id,
-            TipoTarefaId = tipos[1].Id,
-            StatusTarefaId = status[0].Id
-        };
-        var t2 = new Tarefa
-        {
-            Titulo = "Ajustar DTOs",
-            TempoEstimadoMin = 60,
-            UsuarioId = col1.Id,
-            LiderId = lider.Id,
-            TipoTarefaId = tipos[0].Id,
-            StatusTarefaId = status[0].Id
-        };
+            // ----------------------------------------------------------
+            // STATUS DE TAREFA — padrão único:
+            // "Pendente", "Em Andamento", "Finalizado"
+            // + normalização de nomes antigos
+            // ----------------------------------------------------------
+            // 1) Normaliza nomes antigos, se existirem
+            var existentes = db.StatusesTarefa.ToList();
+            if (existentes.Count > 0)
+            {
+                foreach (var s in existentes)
+                {
+                    if (string.IsNullOrWhiteSpace(s.Nome)) continue;
 
-        db.Tarefas.AddRange(t1, t2);
-        db.SaveChanges();
+                    var up = s.Nome.Trim().ToUpperInvariant();
+                    if (up is "EM PROGRESSO" or "EM_PROGRESSO")
+                        s.Nome = "Em Andamento";
+                    else if (up is "CONCLUIDA" or "CONCLUÍDA")
+                        s.Nome = "Finalizado";
+                }
+                db.SaveChanges();
+            }
+
+            // 2) Garante os 3 nomes canônicos
+            void EnsureStatus(string nome)
+            {
+                if (!HasStatusByName(db, nome))
+                {
+                    db.StatusesTarefa.Add(new StatusTarefa { Nome = nome });
+                }
+            }
+
+            EnsureStatus("Pendente");
+            EnsureStatus("Em Andamento");
+            EnsureStatus("Finalizado");
+            db.SaveChanges();
+
+            // ----------------------------------------------------------
+            // USUÁRIOS EXEMPLO (líder e dev)
+            // ----------------------------------------------------------
+            if (!HasAny(db.Usuarios))
+            {
+                var lider = new Usuario
+                {
+                    Username = "lider",
+                    Password = "123456",
+                    RoleUsuario = "ADMIN",
+                    Funcao = "Líder"
+                };
+                db.Usuarios.Add(lider);
+                db.SaveChanges();
+
+                var dev = new Usuario
+                {
+                    Username = "dev",
+                    Password = "123456",
+                    RoleUsuario = "USER",
+                    Funcao = "Desenvolvedor",
+                    IdLider = lider.IdUsuario
+                };
+                db.Usuarios.Add(dev);
+                db.SaveChanges();
+            }
+
+            // ----------------------------------------------------------
+            // TAREFAS EXEMPLO (duas tarefas pendentes para o dev)
+            // ----------------------------------------------------------
+            if (!HasAny(db.Tarefas))
+            {
+                var tipo = db.TiposTarefa.AsNoTracking().First();
+
+                var pendenteId = db.StatusesTarefa.AsNoTracking()
+                    .Where(s => s.Nome.ToUpper() == "PENDENTE")
+                    .Select(s => s.IdStatusTarefa)
+                    .First();
+
+                var liderId = db.Usuarios.AsNoTracking()
+                    .Where(u => u.Username == "lider")
+                    .Select(u => u.IdUsuario)
+                    .First();
+
+                var devId = db.Usuarios.AsNoTracking()
+                    .Where(u => u.Username == "dev")
+                    .Select(u => u.IdUsuario)
+                    .First();
+
+                db.Tarefas.AddRange(
+                    new Tarefa
+                    {
+                        IdUsuario = devId,
+                        IdLider = liderId,
+                        IdTipoTarefa = tipo.IdTipoTarefa,
+                        IdStatusTarefa = pendenteId,
+                        Descricao = "Implementar endpoint X",
+                        TempoEstimado = 90
+                    },
+                    new Tarefa
+                    {
+                        IdUsuario = devId,
+                        IdLider = liderId,
+                        IdTipoTarefa = tipo.IdTipoTarefa,
+                        IdStatusTarefa = pendenteId,
+                        Descricao = "Ajustar Swagger e Healthchecks",
+                        TempoEstimado = 60
+                    }
+                );
+                db.SaveChanges();
+            }
+        }
     }
 }

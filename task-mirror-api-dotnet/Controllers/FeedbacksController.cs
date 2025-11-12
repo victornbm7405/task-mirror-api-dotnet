@@ -14,19 +14,33 @@ public class FeedbacksController : ControllerBase
     private readonly TaskMirrorDbContext _db;
     private readonly IMapper _mapper;
 
-    public FeedbacksController(TaskMirrorDbContext db, IMapper mapper) { _db = db; _mapper = mapper; }
-
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<FeedbackDto>> GetById(int id)
+    public FeedbacksController(TaskMirrorDbContext db, IMapper mapper)
     {
-        var e = await _db.Feedbacks.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id);
-        return e is null ? NotFound() : Ok(_mapper.Map<FeedbackDto>(e));
+        _db = db;
+        _mapper = mapper;
     }
 
-    [HttpGet("por-tarefa/{tarefaId:int}")]
-    public async Task<ActionResult<FeedbackDto>> GetByTarefa(int tarefaId)
+    // GET api/v1/feedbacks/123  -> busca por id_feedback
+    [HttpGet("{idFeedback:int}")]
+    public async Task<ActionResult<FeedbackDto>> GetById(int idFeedback)
     {
-        var e = await _db.Feedbacks.AsNoTracking().FirstOrDefaultAsync(f => f.TarefaId == tarefaId);
-        return e is null ? NotFound() : Ok(_mapper.Map<FeedbackDto>(e));
+        var entity = await _db.Feedbacks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.IdFeedback == idFeedback);
+
+        if (entity is null) return NotFound();
+        return Ok(_mapper.Map<FeedbackDto>(entity));
+    }
+
+    // GET api/v1/feedbacks/por-tarefa/45 -> busca por id_tarefa (1:1)
+    [HttpGet("por-tarefa/{idTarefa:int}")]
+    public async Task<ActionResult<FeedbackDto>> GetByTarefa(int idTarefa)
+    {
+        var entity = await _db.Feedbacks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.IdTarefa == idTarefa);
+
+        if (entity is null) return NotFound();
+        return Ok(_mapper.Map<FeedbackDto>(entity));
     }
 }

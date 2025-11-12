@@ -1,34 +1,40 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskMirror.Data;
-using TaskMirror.DTOs;
-using TaskMirror.Models;
 
-namespace TaskMirror.Controllers;
-
-[ApiController]
-[Route("api/v1/status-tarefa")]
-public class StatusTarefaController : ControllerBase
+namespace TaskMirror.Controllers
 {
-    private readonly TaskMirrorDbContext _db;
-    private readonly IMapper _mapper;
-
-    public StatusTarefaController(TaskMirrorDbContext db, IMapper mapper) { _db = db; _mapper = mapper; }
-
-    [HttpGet]
-    public async Task<IEnumerable<StatusTarefaDto>> Get()
-        => _mapper.Map<IEnumerable<StatusTarefaDto>>(await _db.StatusesTarefa.AsNoTracking().ToListAsync());
-
-    [HttpPost]
-    public async Task<ActionResult<StatusTarefaDto>> Post(StatusTarefaCreateDto dto)
+    [ApiController]
+    [Route("api/status")]
+    public class StatusTarefaController : ControllerBase
     {
-        var e = _mapper.Map<StatusTarefa>(dto);
-        _db.StatusesTarefa.Add(e);
-        await _db.SaveChangesAsync();
-        var outDto = _mapper.Map<StatusTarefaDto>(e);
-        return CreatedAtAction(nameof(Get), new { id = e.Id }, outDto);
+        private readonly TaskMirrorDbContext _db;
+
+        public StatusTarefaController(TaskMirrorDbContext db)
+        {
+            _db = db;
+        }
+
+        // GET: api/status
+        // Retorna SOMENTE os status que estão sendo usados em tarefas,
+        // junto com a quantidade de tarefas em cada um (ajuda no dashboard).
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<object>>> GetUsados()
+        {
+            // Faz join implícito pela navegação e filtra apenas os que existem em Tarefas
+            var usados = await _db.Tarefas
+                .Include(t => t.StatusTarefa)
+                .GroupBy(t => new { t.IdStatusTarefa, t.StatusTarefa!.Nome })
+                .Select(g => new
+                {
+                    idStatusTarefa = g.Key.IdStatusTarefa,
+                    nome = g.Key.Nome,
+                    quantidade = g.Count()
+                })
+                .OrderBy(x => x.idStatusTarefa)
+                .ToListAsync();
+
+            return Ok(usados);
+        }
     }
 }

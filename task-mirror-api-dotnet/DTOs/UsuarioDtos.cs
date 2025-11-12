@@ -1,5 +1,28 @@
 namespace TaskMirror.DTOs;
 
-public record UsuarioDto(int Id, string Username, string Role, string Funcao, int? IdLider);
-public record UsuarioCreateDto(string Username, string Password, string Role, string Funcao, int? IdLider);
-public record UsuarioUpdateDto(string? Password, string? Role, string? Funcao, int? IdLider);
+// DTO de saída (consulta)
+public record UsuarioDto(
+    int IdUsuario,
+    string Username,
+    string RoleUsuario,
+    string Funcao,
+    int? IdLider
+);
+
+// DTO de criação
+public record UsuarioCreateDto(
+    string Username,
+    string Password,
+    string RoleUsuario,
+    string Funcao,
+    int? IdLider
+);
+
+// DTO de atualização (todos opcionais)
+public record UsuarioUpdateDto(
+    string? Username,
+    string? Password,
+    string? RoleUsuario,
+    string? Funcao,
+    int? IdLider
+);

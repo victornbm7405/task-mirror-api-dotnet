@@ -2,40 +2,54 @@ using System;
 
 namespace TaskMirror.DTOs;
 
-public record TarefaDto(
-    int Id,
-    string Titulo,
+// =============== REQUESTS (entrada) ===============
+public sealed record TarefaCreateRequest(
     string? Descricao,
-    int TempoEstimadoMin,
-    int? TempoRealMin,
-    DateTimeOffset? DataInicio,
-    DateTimeOffset? DataFim,
-    int UsuarioId,
-    int? LiderId,
-    int TipoTarefaId,
-    int StatusTarefaId
+    decimal TempoEstimado,
+    int IdUsuario,     // funcionário dono da tarefa
+    int IdLider,       // líder que atribui
+    int IdTipoTarefa   // tipo
 );
 
-public record TarefaCreateDto(
-    string Titulo,
+public sealed record TarefaUpdateRequest(
     string? Descricao,
-    int TempoEstimadoMin,
-    int UsuarioId,
-    int? LiderId,
-    int TipoTarefaId,
-    int StatusTarefaId
+    decimal? TempoEstimado,
+    int? IdUsuario,
+    int? IdLider,
+    int? IdTipoTarefa,
+    int? IdStatusTarefa,
+    DateTime? DataInicio,
+    DateTime? DataFim,
+    decimal? TempoReal
 );
 
-public record TarefaUpdateDto(
-    string? Titulo,
+// =============== RESPONSES (saída) ===============
+public sealed record TarefaListItemDto(
+    int IdTarefa,
     string? Descricao,
-    int? TempoEstimadoMin,
-    int? UsuarioId,
-    int? LiderId,
-    int? TipoTarefaId,
-    int? StatusTarefaId
+    string Status,
+    string Tipo,
+    int IdUsuario,
+    string Usuario,
+    int IdLider,
+    string Lider,
+    decimal? TempoEstimado,
+    decimal? TempoReal,
+    DateTime? DataInicio,
+    DateTime? DataFim
 );
 
-public record FinalizarTarefaResponse(
-    int TarefaId, int? TempoRealMin, int Nota, string? Comentario
+public sealed record TarefaDetailsDto(
+    int IdTarefa,
+    string? Descricao,
+    string Status,
+    string Tipo,
+    int IdUsuario,
+    string Usuario,
+    int IdLider,
+    string Lider,
+    decimal? TempoEstimado,
+    decimal? TempoReal,
+    DateTime? DataInicio,
+    DateTime? DataFim
 );

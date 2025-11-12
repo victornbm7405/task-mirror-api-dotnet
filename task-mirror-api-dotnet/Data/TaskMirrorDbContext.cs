@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using TaskMirror.Models;
 
 namespace TaskMirror.Data;
@@ -13,32 +13,66 @@ public class TaskMirrorDbContext : DbContext
     public DbSet<Tarefa> Tarefas => Set<Tarefa>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder model)
     {
-        // PKs autogeradas (Oracle Identity)
-        modelBuilder.Entity<Usuario>().Property(p => p.Id).ValueGeneratedOnAdd();
-        modelBuilder.Entity<TipoTarefa>().Property(p => p.Id).ValueGeneratedOnAdd();
-        modelBuilder.Entity<StatusTarefa>().Property(p => p.Id).ValueGeneratedOnAdd();
-        modelBuilder.Entity<Tarefa>().Property(p => p.Id).ValueGeneratedOnAdd();
-        modelBuilder.Entity<Feedback>().Property(p => p.Id).ValueGeneratedOnAdd();
+        model.Entity<Usuario>()
+             .HasIndex(u => u.Username)
+             .IsUnique();
 
-        // Usuario self reference (Lider ? Subordinados)
-        modelBuilder.Entity<Usuario>()
-            .HasOne(u => u.Lider)
-            .WithMany(u => u!.Subordinados)
-            .HasForeignKey(u => u.IdLider)
-            .OnDelete(DeleteBehavior.Restrict);
+        model.Entity<Usuario>()
+             .HasOne(u => u.Lider)
+             .WithMany(u => u.Subordinados)
+             .HasForeignKey(u => u.IdLider)
+             .OnDelete(DeleteBehavior.SetNull)
+             .HasConstraintName("fk_usuarios_lider");
 
-        // 1:1 Tarefa ? Feedback (unique em TarefaId)
-        modelBuilder.Entity<Feedback>()
-            .HasIndex(f => f.TarefaId)
-            .IsUnique();
+        model.Entity<Tarefa>()
+             .HasOne(t => t.Usuario)
+             .WithMany()
+             .HasForeignKey(t => t.IdUsuario)
+             .OnDelete(DeleteBehavior.Restrict)
+             .HasConstraintName("fk_tarefas_usuario");
 
-        modelBuilder.Entity<Tarefa>()
-            .HasOne(t => t.Feedback)
-            .WithOne(f => f.Tarefa)
-            .HasForeignKey<Feedback>(f => f.TarefaId);
+        model.Entity<Tarefa>()
+             .HasOne(t => t.Lider)
+             .WithMany()
+             .HasForeignKey(t => t.IdLider)
+             .OnDelete(DeleteBehavior.Restrict)
+             .HasConstraintName("fk_tarefas_lider");
 
-        base.OnModelCreating(modelBuilder);
+        model.Entity<Tarefa>()
+             .HasOne(t => t.TipoTarefa)
+             .WithMany()
+             .HasForeignKey(t => t.IdTipoTarefa)
+             .OnDelete(DeleteBehavior.Restrict)
+             .HasConstraintName("fk_tarefas_tipo");
+
+        model.Entity<Tarefa>()
+             .HasOne(t => t.StatusTarefa)
+             .WithMany()
+             .HasForeignKey(t => t.IdStatusTarefa)
+             .OnDelete(DeleteBehavior.Restrict)
+             .HasConstraintName("fk_tarefas_status");
+
+        model.Entity<Tarefa>()
+             .Property(t => t.TempoEstimado)
+             .HasColumnType("NUMBER(5,2)");
+
+        model.Entity<Tarefa>()
+             .Property(t => t.TempoReal)
+             .HasColumnType("NUMBER(5,2)");
+
+        model.Entity<Feedback>()
+             .HasIndex(f => f.IdTarefa)
+             .IsUnique();
+
+        model.Entity<Tarefa>()
+             .HasOne(t => t.Feedback)
+             .WithOne(f => f.Tarefa)
+             .HasForeignKey<Feedback>(f => f.IdTarefa)
+             .OnDelete(DeleteBehavior.Cascade)
+             .HasConstraintName("fk_feedback_tarefa");
+
+        base.OnModelCreating(model);
     }
 }

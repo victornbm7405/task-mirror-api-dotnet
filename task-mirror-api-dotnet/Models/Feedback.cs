@@ -1,16 +1,29 @@
 using System;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TaskMirror.Models;
 
+[Table("tbl_feedbacks")]
 public class Feedback
 {
-    public int Id { get; set; }
+    [Key]
+    [Column("id_feedback")]
+    public int IdFeedback { get; set; }
 
-    public int TarefaId { get; set; }
-    public Tarefa Tarefa { get; set; } = default!;
+    [Required]
+    [Column("id_tarefa")]
+    public int IdTarefa { get; set; }     // FK única p/ Tarefa
 
-    public int Nota { get; set; } // 1-5
-    public string? Comentario { get; set; }
-    public bool GeradoAutomatico { get; set; } = true;
-    public DateTimeOffset DataCriacao { get; set; } = DateTimeOffset.UtcNow;
+    [Required]
+    [Column("conteudo")]
+    [MaxLength(1000)]
+    public string Conteudo { get; set; } = null!;
+
+    [Required]
+    [Column("data_gerado")]
+    public DateTime DataGerado { get; set; }
+
+    // Navegação 1:1
+    public Tarefa Tarefa { get; set; } = null!;
 }
