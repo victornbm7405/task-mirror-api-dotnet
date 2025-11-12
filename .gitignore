@@ -1,0 +1,20 @@
+﻿# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build
+bin/
+obj/
+out/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+
+# Rider/VSCode
+.idea/
+.vscode/
+
+# Outros
+*.log
+*.vgdbsettings
