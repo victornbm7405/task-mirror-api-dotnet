@@ -1,4 +1,6 @@
 using AutoMapper;
+using TaskMirror.Models;
+using TaskMirror.DTOs;
 
 namespace TaskMirror.Mapping
 {
@@ -9,7 +11,32 @@ namespace TaskMirror.Mapping
     {
         public TaskMirrorProfile()
         {
-            // Adicione mappings aqui quando (e se) criar DTOs específicos.
+            // =====================================================
+            // USUÁRIO
+            // =====================================================
+
+            // Entidade -> DTO de saída
+            CreateMap<Usuario, UsuarioDto>();
+
+            // DTO de criação -> Entidade
+            CreateMap<UsuarioCreateDto, Usuario>();
+
+            // DTO de atualização -> Entidade (ignora campos nulos)
+            CreateMap<UsuarioUpdateDto, Usuario>()
+                .ForAllMembers(opt =>
+                    opt.Condition((src, dest, srcMember) => srcMember != null)
+                );
+
+            // =====================================================
+            // TIPO TAREFA
+            // =====================================================
+
+            // Entidade -> DTO de saída
+            CreateMap<TipoTarefa, TipoTarefaDto>();
+
+            // DTOs de entrada (se você for usar POST/PUT depois)
+            CreateMap<TipoTarefaCreateDto, TipoTarefa>();
+            CreateMap<TipoTarefaUpdateDto, TipoTarefa>();
         }
     }
 }
