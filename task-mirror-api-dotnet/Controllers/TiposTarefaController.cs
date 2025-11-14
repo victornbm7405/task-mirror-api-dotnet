@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 using AutoMapper;
 using TaskMirror.Data;
 using TaskMirror.DTOs;
+using TaskMirror.Services;
 
 namespace TaskMirror.Controllers;
 
 [ApiController]
-[Route("api/tipos-tarefa")]
+[Route("api/v1/tipos-tarefa")]
 [Authorize(Roles = "LIDER,USER")] // 🔐 Apenas usuários autenticados podem acessar
 public class TiposTarefaController : ControllerBase
 {
@@ -23,15 +25,39 @@ public class TiposTarefaController : ControllerBase
         _mapper = mapper;
     }
 
-    // GET: api/tipos-tarefa
+    // GET: api/v1/tipos-tarefa
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TipoTarefaDto>>> GetAll()
+    public async Task<ActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var list = await _db.TiposTarefa
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+        if (pageSize > 50) pageSize = 50;
+
+        var query = _db.TiposTarefa
             .AsNoTracking()
+            .OrderBy(t => t.IdTipoTarefa)
+            .AsQueryable();
+
+        var total = await query.CountAsync();
+
+        var list = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var dto = _mapper.Map<IEnumerable<TipoTarefaDto>>(list);
-        return Ok(dto);
+
+        var result = new
+        {
+            data = dto,
+            total,
+            page,
+            pageSize,
+            _links = Hateoas.BuildListLinks("/api/v1/tipos-tarefa", page, pageSize, total)
+        };
+
+        return Ok(result);
     }
 }

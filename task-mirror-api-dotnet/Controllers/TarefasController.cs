@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -12,7 +13,7 @@ using TaskMirror.DTOs;
 namespace TaskMirror.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")] // => api/tarefas
+    [Route("api/v1/tarefas")] // => api/v1/tarefas
     [Authorize(Roles = "LIDER,USER")] // 🔐 Todo mundo aqui precisa estar autenticado
     public class TarefasController : ControllerBase
     {
@@ -66,12 +67,18 @@ namespace TaskMirror.Controllers
 
         // ============================== ENDPOINTS ==============================
 
-        // GET: api/tarefas  (lista enxuta)
+        // GET: api/v1/tarefas  (lista enxuta)
         // LIDER -> vê tudo
         // USER  -> vê apenas as próprias tarefas
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<object>>> GetAll()
+        public async Task<ActionResult> GetAll(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+            if (pageSize > 50) pageSize = 50;
+
             var userId = GetUsuarioIdFromToken();
             var isLeader = User.IsInRole("LIDER");
 
@@ -89,14 +96,28 @@ namespace TaskMirror.Controllers
                 query = query.Where(t => t.IdUsuario == userId);
             }
 
+            var total = await query.CountAsync();
+
             var list = await query
+                .OrderBy(t => t.IdTarefa)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(t => ToThinResponseProjection(t))
                 .ToListAsync();
 
-            return Ok(list);
+            var result = new
+            {
+                data = list,
+                total,
+                page,
+                pageSize,
+                _links = Hateoas.BuildListLinks("/api/v1/tarefas", page, pageSize, total)
+            };
+
+            return Ok(result);
         }
 
-        // GET: api/tarefas/5  (detalhe enxuto)
+        // GET: api/v1/tarefas/5  (detalhe enxuto)
         // LIDER -> pode ver qualquer
         // USER  -> só se for tarefa dele
         [HttpGet("{idTarefa:int}")]
@@ -119,10 +140,18 @@ namespace TaskMirror.Controllers
             if (!isLeader && tarefa.IdUsuario != userId)
                 return Forbid(); // USER tentando acessar tarefa de outro
 
-            return Ok(ToThinResponse(tarefa));
+            var thin = ToThinResponse(tarefa);
+
+            var result = new
+            {
+                data = thin,
+                _links = Hateoas.BuildResourceLinks("/api/v1/tarefas", idTarefa)
+            };
+
+            return Ok(result);
         }
 
-        // POST: api/tarefas  (líder cria para subordinado)
+        // POST: api/v1/tarefas  (líder cria para subordinado)
         // 🔒 SOMENTE LIDER pode criar tarefa
         [HttpPost]
         [Authorize(Roles = "LIDER")]
@@ -159,7 +188,7 @@ namespace TaskMirror.Controllers
             }
         }
 
-        // POST: api/tarefas/{idTarefa}/iniciar
+        // POST: api/v1/tarefas/{idTarefa}/iniciar
         // 🔓 USER pode iniciar tarefa, mas APENAS a própria
         // 🔒 LIDER NÃO PODE iniciar tarefas
         [HttpPost("{idTarefa:int}/iniciar")]
@@ -192,7 +221,7 @@ namespace TaskMirror.Controllers
             }
         }
 
-        // POST: api/tarefas/{idTarefa}/finalizar
+        // POST: api/v1/tarefas/{idTarefa}/finalizar
         // 🔓 USER pode finalizar tarefa, mas APENAS a própria
         // 🔒 LIDER NÃO PODE finalizar tarefas
         [HttpPost("{idTarefa:int}/finalizar")]
@@ -224,7 +253,7 @@ namespace TaskMirror.Controllers
             }
         }
 
-        // PUT: api/tarefas/5  (manutenção geral — líder/admin)
+        // PUT: api/v1/tarefas/5  (manutenção geral — líder/admin)
         // 🔒 SOMENTE LIDER
         [HttpPut("{idTarefa:int}")]
         [Authorize(Roles = "LIDER")]
@@ -249,7 +278,7 @@ namespace TaskMirror.Controllers
             return NoContent();
         }
 
-        // DELETE: api/tarefas/5
+        // DELETE: api/v1/tarefas/5
         // 🔒 SOMENTE LIDER
         [HttpDelete("{idTarefa:int}")]
         [Authorize(Roles = "LIDER")]

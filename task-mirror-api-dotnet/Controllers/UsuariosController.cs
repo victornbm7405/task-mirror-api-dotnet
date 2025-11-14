@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using TaskMirror.Data;
 using TaskMirror.DTOs;
 using TaskMirror.Models;
+using TaskMirror.Services;
 
 namespace TaskMirror.Controllers;
 
@@ -26,24 +28,60 @@ public class UsuariosController : ControllerBase
 
     // GET api/v1/usuarios
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<UsuarioDto>>> Get()
+    public async Task<ActionResult> Get(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var list = await _db.Usuarios
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+        if (pageSize > 50) pageSize = 50;
+
+        var query = _db.Usuarios
             .AsNoTracking()
+            .OrderBy(u => u.IdUsuario)
+            .AsQueryable();
+
+        var total = await query.CountAsync();
+
+        var list = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        return Ok(_mapper.Map<IEnumerable<UsuarioDto>>(list));
+        var dto = _mapper.Map<IEnumerable<UsuarioDto>>(list);
+
+        var result = new
+        {
+            data = dto,
+            total,
+            page,
+            pageSize,
+            _links = Hateoas.BuildListLinks("/api/v1/usuarios", page, pageSize, total)
+        };
+
+        return Ok(result);
     }
 
     // GET api/v1/usuarios/5
     [HttpGet("{idUsuario:int}")]
-    public async Task<ActionResult<UsuarioDto>> GetById(int idUsuario)
+    public async Task<ActionResult> GetById(int idUsuario)
     {
         var u = await _db.Usuarios
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.IdUsuario == idUsuario);
 
-        return u is null ? NotFound() : Ok(_mapper.Map<UsuarioDto>(u));
+        if (u is null)
+            return NotFound();
+
+        var dto = _mapper.Map<UsuarioDto>(u);
+
+        var result = new
+        {
+            data = dto,
+            _links = Hateoas.BuildResourceLinks("/api/v1/usuarios", idUsuario)
+        };
+
+        return Ok(result);
     }
 
     // POST api/v1/usuarios

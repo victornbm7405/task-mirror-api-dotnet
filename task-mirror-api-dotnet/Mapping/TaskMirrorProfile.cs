@@ -4,9 +4,9 @@ using TaskMirror.DTOs;
 
 namespace TaskMirror.Mapping
 {
-    // Profile mínimo só para manter o AutoMapper registrado.
-    // Não mapeamos Tarefa/Usuario/etc. aqui porque as respostas
-    // são projetadas diretamente via LINQ no controller.
+    /// <summary>
+    /// Profile central do AutoMapper para o TaskMirror.
+    /// </summary>
     public class TaskMirrorProfile : Profile
     {
         public TaskMirrorProfile()
@@ -21,11 +21,10 @@ namespace TaskMirror.Mapping
             // DTO de criação -> Entidade
             CreateMap<UsuarioCreateDto, Usuario>();
 
-            // DTO de atualização -> Entidade (ignora campos nulos)
+            // Atualização parcial: só mapeia campos que vierem preenchidos no DTO
             CreateMap<UsuarioUpdateDto, Usuario>()
-                .ForAllMembers(opt =>
-                    opt.Condition((src, dest, srcMember) => srcMember != null)
-                );
+                .ForAllMembers(opts =>
+                    opts.Condition((src, dest, srcMember) => srcMember != null));
 
             // =====================================================
             // TIPO TAREFA
@@ -33,10 +32,24 @@ namespace TaskMirror.Mapping
 
             // Entidade -> DTO de saída
             CreateMap<TipoTarefa, TipoTarefaDto>();
+            CreateMap<TipoTarefaCreateDto, TipoTarefa>();
+            CreateMap<TipoTarefaUpdateDto, TipoTarefa>();
 
             // DTOs de entrada (se você for usar POST/PUT depois)
             CreateMap<TipoTarefaCreateDto, TipoTarefa>();
             CreateMap<TipoTarefaUpdateDto, TipoTarefa>();
+
+            // =====================================================
+            // STATUS TAREFA
+            // =====================================================
+            CreateMap<StatusTarefa, StatusTarefaDto>();
+            CreateMap<StatusTarefaCreateDto, StatusTarefa>();
+            CreateMap<StatusTarefaUpdateDto, StatusTarefa>();
+
+            // =====================================================
+            // FEEDBACK
+            // =====================================================
+            CreateMap<Feedback, FeedbackDto>();
         }
     }
 }
