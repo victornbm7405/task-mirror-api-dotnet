@@ -1,3 +1,6 @@
+Ôªøusing System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskMirror.Data;
@@ -6,6 +9,7 @@ namespace TaskMirror.Controllers
 {
     [ApiController]
     [Route("api/status")]
+    [Authorize(Roles = "LIDER,USER")] // üîê precisa estar logado (LIDER ou USER)
     public class StatusTarefaController : ControllerBase
     {
         private readonly TaskMirrorDbContext _db;
@@ -16,12 +20,12 @@ namespace TaskMirror.Controllers
         }
 
         // GET: api/status
-        // Retorna SOMENTE os status que est„o sendo usados em tarefas,
+        // Retorna SOMENTE os status que est√£o sendo usados em tarefas,
         // junto com a quantidade de tarefas em cada um (ajuda no dashboard).
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetUsados()
         {
-            // Faz join implÌcito pela navegaÁ„o e filtra apenas os que existem em Tarefas
+            // Faz join impl√≠cito pela navega√ß√£o e filtra apenas os que existem em Tarefas
             var usados = await _db.Tarefas
                 .Include(t => t.StatusTarefa)
                 .GroupBy(t => new { t.IdStatusTarefa, t.StatusTarefa!.Nome })

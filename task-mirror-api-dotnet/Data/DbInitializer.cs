@@ -92,7 +92,7 @@ namespace TaskMirror.Data
                 {
                     Username = "lider",
                     Password = "123456",
-                    RoleUsuario = "ADMIN",
+                    RoleUsuario = "LIDER",
                     Funcao = "Líder"
                 };
                 db.Usuarios.Add(lider);

@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskMirror.Data;
@@ -11,6 +12,7 @@ namespace TaskMirror.Controllers;
 
 [ApiController]
 [Route("api/v1/usuarios")]
+[Authorize(Roles = "LIDER")] // 🔒 SOMENTE LIDER pode mexer em usuários
 public class UsuariosController : ControllerBase
 {
     private readonly TaskMirrorDbContext _db;
@@ -48,12 +50,12 @@ public class UsuariosController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<UsuarioDto>> Post(UsuarioCreateDto dto)
     {
-        // dto esperado: Username, Password, RoleUsuario, Funcao, IdLider (opcional)
         var entity = _mapper.Map<Usuario>(dto);
+
         _db.Usuarios.Add(entity);
         await _db.SaveChangesAsync();
 
-        var outDto = _mapper.Map<UsuarioDto>(entity); // esperado: IdUsuario, Username, RoleUsuario, Funcao, IdLider
+        var outDto = _mapper.Map<UsuarioDto>(entity);
         return CreatedAtAction(nameof(GetById), new { idUsuario = entity.IdUsuario }, outDto);
     }
 
@@ -61,13 +63,13 @@ public class UsuariosController : ControllerBase
     [HttpPut("{idUsuario:int}")]
     public async Task<IActionResult> Put(int idUsuario, UsuarioUpdateDto dto)
     {
-        // opcional: validar coer�ncia se dto tiver IdUsuario
+        // opcional: validar coerência se dto tiver IdUsuario
         // if (dto.IdUsuario != 0 && dto.IdUsuario != idUsuario) return BadRequest("IdUsuario do path difere do body.");
 
         var entity = await _db.Usuarios.FindAsync(idUsuario);
         if (entity is null) return NotFound();
 
-        _mapper.Map(dto, entity); // dto deve ter apenas campos v�lidos do DDL (Username, Password, RoleUsuario, Funcao, IdLider)
+        _mapper.Map(dto, entity);
         await _db.SaveChangesAsync();
         return NoContent();
     }

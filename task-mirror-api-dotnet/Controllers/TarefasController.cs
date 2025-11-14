@@ -1,4 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Collections.Generic;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskMirror.Data;
 using TaskMirror.Models;
@@ -9,6 +13,7 @@ namespace TaskMirror.Controllers
 {
     [ApiController]
     [Route("api/[controller]")] // => api/tarefas
+    [Authorize(Roles = "LIDER,USER")] // 🔐 Todo mundo aqui precisa estar autenticado
     public class TarefasController : ControllerBase
     {
         private readonly TaskMirrorDbContext _db;
@@ -20,7 +25,16 @@ namespace TaskMirror.Controllers
             _service = service;
         }
 
-        // =============== Helpers de projeção (respostas enxutas) ===============
+        // ================= Helpers =================
+
+        private int GetUsuarioIdFromToken()
+        {
+            var claim = User.FindFirst("idUsuario");
+            if (claim == null)
+                throw new System.Exception("Claim 'idUsuario' não encontrada no token.");
+
+            return int.Parse(claim.Value);
+        }
 
         private static object ToThinResponse(Tarefa t) => new
         {
@@ -53,15 +67,29 @@ namespace TaskMirror.Controllers
         // ============================== ENDPOINTS ==============================
 
         // GET: api/tarefas  (lista enxuta)
+        // LIDER -> vê tudo
+        // USER  -> vê apenas as próprias tarefas
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetAll()
         {
-            var list = await _db.Tarefas
+            var userId = GetUsuarioIdFromToken();
+            var isLeader = User.IsInRole("LIDER");
+
+            var query = _db.Tarefas
                 .AsNoTracking()
                 .Include(t => t.Usuario)
                 .Include(t => t.Lider)
                 .Include(t => t.TipoTarefa)
                 .Include(t => t.StatusTarefa)
+                .AsQueryable();
+
+            if (!isLeader)
+            {
+                // USER só enxerga as tarefas em que ele é o responsável
+                query = query.Where(t => t.IdUsuario == userId);
+            }
+
+            var list = await query
                 .Select(t => ToThinResponseProjection(t))
                 .ToListAsync();
 
@@ -69,9 +97,14 @@ namespace TaskMirror.Controllers
         }
 
         // GET: api/tarefas/5  (detalhe enxuto)
+        // LIDER -> pode ver qualquer
+        // USER  -> só se for tarefa dele
         [HttpGet("{idTarefa:int}")]
         public async Task<ActionResult<object>> GetById(int idTarefa)
         {
+            var userId = GetUsuarioIdFromToken();
+            var isLeader = User.IsInRole("LIDER");
+
             var tarefa = await _db.Tarefas
                 .AsNoTracking()
                 .Include(t => t.Usuario)
@@ -80,12 +113,19 @@ namespace TaskMirror.Controllers
                 .Include(t => t.StatusTarefa)
                 .FirstOrDefaultAsync(t => t.IdTarefa == idTarefa);
 
-            if (tarefa is null) return NotFound();
+            if (tarefa is null)
+                return NotFound();
+
+            if (!isLeader && tarefa.IdUsuario != userId)
+                return Forbid(); // USER tentando acessar tarefa de outro
+
             return Ok(ToThinResponse(tarefa));
         }
 
         // POST: api/tarefas  (líder cria para subordinado)
+        // 🔒 SOMENTE LIDER pode criar tarefa
         [HttpPost]
+        [Authorize(Roles = "LIDER")]
         public async Task<ActionResult<object>> Create([FromBody] TarefaCreateRequest body)
         {
             try
@@ -119,13 +159,18 @@ namespace TaskMirror.Controllers
             }
         }
 
-        // POST: api/tarefas/{idTarefa}/iniciar?usuario=123
+        // POST: api/tarefas/{idTarefa}/iniciar
+        // 🔓 USER pode iniciar tarefa, mas APENAS a própria
+        // 🔒 LIDER NÃO PODE iniciar tarefas
         [HttpPost("{idTarefa:int}/iniciar")]
-        public async Task<ActionResult<object>> Iniciar(int idTarefa, [FromQuery] int usuario)
+        [Authorize(Roles = "USER")]
+        public async Task<ActionResult<object>> Iniciar(int idTarefa)
         {
+            var userId = GetUsuarioIdFromToken();
+
             try
             {
-                var tarefa = await _service.IniciarAsync(idTarefa, usuario);
+                var tarefa = await _service.IniciarAsync(idTarefa, userId);
                 if (tarefa is null) return NotFound();
 
                 tarefa = await _db.Tarefas
@@ -134,6 +179,10 @@ namespace TaskMirror.Controllers
                     .Include(t => t.TipoTarefa)
                     .Include(t => t.StatusTarefa)
                     .FirstAsync(t => t.IdTarefa == tarefa.IdTarefa);
+
+                // Garantia extra: mesmo no Service tendo checado, aqui garantimos que USER não veja tarefa de outro
+                if (tarefa.IdUsuario != userId)
+                    return Forbid();
 
                 return Ok(ToThinResponse(tarefa));
             }
@@ -143,13 +192,18 @@ namespace TaskMirror.Controllers
             }
         }
 
-        // POST: api/tarefas/{idTarefa}/finalizar?usuario=123
+        // POST: api/tarefas/{idTarefa}/finalizar
+        // 🔓 USER pode finalizar tarefa, mas APENAS a própria
+        // 🔒 LIDER NÃO PODE finalizar tarefas
         [HttpPost("{idTarefa:int}/finalizar")]
-        public async Task<ActionResult<object>> Finalizar(int idTarefa, [FromQuery] int usuario)
+        [Authorize(Roles = "USER")]
+        public async Task<ActionResult<object>> Finalizar(int idTarefa)
         {
+            var userId = GetUsuarioIdFromToken();
+
             try
             {
-                var tarefa = await _service.FinalizarAsync(idTarefa, usuario);
+                var tarefa = await _service.FinalizarAsync(idTarefa, userId);
                 if (tarefa is null) return NotFound();
 
                 tarefa = await _db.Tarefas
@@ -158,6 +212,9 @@ namespace TaskMirror.Controllers
                     .Include(t => t.TipoTarefa)
                     .Include(t => t.StatusTarefa)
                     .FirstAsync(t => t.IdTarefa == tarefa.IdTarefa);
+
+                if (tarefa.IdUsuario != userId)
+                    return Forbid();
 
                 return Ok(ToThinResponse(tarefa));
             }
@@ -168,7 +225,9 @@ namespace TaskMirror.Controllers
         }
 
         // PUT: api/tarefas/5  (manutenção geral — líder/admin)
+        // 🔒 SOMENTE LIDER
         [HttpPut("{idTarefa:int}")]
+        [Authorize(Roles = "LIDER")]
         public async Task<IActionResult> Update(int idTarefa, [FromBody] TarefaUpdateRequest input)
         {
             var tarefa = await _db.Tarefas.FirstOrDefaultAsync(t => t.IdTarefa == idTarefa);
@@ -191,7 +250,9 @@ namespace TaskMirror.Controllers
         }
 
         // DELETE: api/tarefas/5
+        // 🔒 SOMENTE LIDER
         [HttpDelete("{idTarefa:int}")]
+        [Authorize(Roles = "LIDER")]
         public async Task<IActionResult> Delete(int idTarefa)
         {
             var tarefa = await _db.Tarefas.FindAsync(idTarefa);

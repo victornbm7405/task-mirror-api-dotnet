@@ -1,7 +1,12 @@
 ﻿using System.Linq;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Oracle.ManagedDataAccess.Client;
+using TaskMirror.Auth;
 using TaskMirror.Data;
 using TaskMirror.Mapping;
 using TaskMirror.Services;
@@ -9,10 +14,43 @@ using TaskMirror.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // =====================================================
-// Swagger
+// Swagger + JWT (Authorize)
 // =====================================================
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    // Documento básico
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "TaskMirror API",
+        Version = "v1",
+        Description = "API de gestão de tarefas com líderes e colaboradores (JWT + Roles)."
+    });
+
+    // Esquema de segurança JWT
+    var jwtSecurityScheme = new OpenApiSecurityScheme
+    {
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Description = "Informe: Bearer {seu_token_jwt}",
+        Reference = new OpenApiReference
+        {
+            Id = JwtBearerDefaults.AuthenticationScheme,
+            Type = ReferenceType.SecurityScheme
+        }
+    };
+
+    c.AddSecurityDefinition(jwtSecurityScheme.Reference.Id, jwtSecurityScheme);
+
+    // Exige o esquema em TODAS as operações (ícone de cadeado + botão Authorize)
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { jwtSecurityScheme, Array.Empty<string>() }
+    });
+});
 
 // =====================================================
 // Controllers (evita ciclos na serialização)
@@ -36,18 +74,13 @@ var cs = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<TaskMirrorDbContext>(o =>
 {
     o.UseOracle(cs);
-    // Opcional: se quiser ver SQL no log:
-    // o.EnableSensitiveDataLogging();
 });
 
 // =====================================================
 // Health Checks
-// - liveness: confirma que o processo está vivo
-// - readiness: verifica dependências (Oracle/EF)
 // =====================================================
 builder.Services
     .AddHealthChecks()
-    // readiness: verifica se o EF/Oracle está OK
     .AddDbContextCheck<TaskMirrorDbContext>(
         name: "oracle-db",
         tags: new[] { "ready" }
@@ -58,10 +91,40 @@ builder.Services
 // =====================================================
 builder.Services.AddScoped<TarefaService>();
 
+// =====================================================
+// Auth: JWT + Authorization
+// =====================================================
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var keyBytes = Encoding.ASCII.GetBytes(jwtSection["Key"] ?? "CHAVE_SECRETA_DEV");
+
+// Serviço que gera o token
+builder.Services.AddScoped<TokenService>();
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // dev
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+        ValidateIssuer = false,
+        ValidateAudience = false,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // =====================================================
-// Swagger (apenas em Development)
+// Swagger
 // =====================================================
 if (app.Environment.IsDevelopment())
 {
@@ -70,7 +133,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // =====================================================
-// Migrations + Seed (Oracle) — protegido para não derrubar a API
+// Migrations + Seed (Oracle)
 // =====================================================
 using (var scope = app.Services.CreateScope())
 {
@@ -78,15 +141,13 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<TaskMirrorDbContext>();
-        db.Database.Migrate();  // aplica migrations
-        DbInitializer.Seed(db); // popula dados mínimos (status/tipos/usuarios/tarefas)
+        db.Database.Migrate();
+        DbInitializer.Seed(db);
         logger.LogInformation("✅ Migração e Seed executados com sucesso.");
     }
     catch (OracleException ex)
     {
         logger.LogError(ex, "❌ Oracle indisponível no startup. API vai subir mesmo assim.");
-        // Se precisar, limpe pools:
-        // OracleConnection.ClearAllPools();
     }
     catch (Exception ex)
     {
@@ -96,22 +157,18 @@ using (var scope = app.Services.CreateScope())
 
 app.UseHttpsRedirection();
 
-// =====================================================
-// Endpoints de Health
-// =====================================================
+// Auth
+app.UseAuthentication();
+app.UseAuthorization();
 
-// Liveness: sem checks — apenas indica que a API está de pé.
+// Health
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
-    // Liveness não executa nenhum check (só confirma que o processo está vivo)
     Predicate = _ => false
 });
 
-// Readiness: roda os checks com tag "ready" (DbContext/Oracle)
-// e retorna um JSON resumido do status.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
-    // Readiness roda só os checks com tag "ready" (DbContext/Oracle)
     Predicate = reg => reg.Tags.Contains("ready"),
     ResponseWriter = async (ctx, report) =>
     {

@@ -1,3 +1,6 @@
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper;
@@ -8,6 +11,7 @@ namespace TaskMirror.Controllers;
 
 [ApiController]
 [Route("api/tipos-tarefa")]
+[Authorize(Roles = "LIDER,USER")] // 🔐 Apenas usuários autenticados podem acessar
 public class TiposTarefaController : ControllerBase
 {
     private readonly TaskMirrorDbContext _db;

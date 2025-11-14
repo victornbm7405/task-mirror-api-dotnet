@@ -6,17 +6,26 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
-
 	<ItemGroup>
-    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.8" />
-    <PackageReference Include="Oracle.EntityFrameworkCore" Version="9.23.26000" />
-    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.0" />
-  </ItemGroup>
+		<PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.2" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.8" />
+
+		<!-- 🔴 REMOVE ESSA LINHA: NÃO vamos referenciar Microsoft.OpenApi diretamente -->
+		<!-- <PackageReference Include="Microsoft.OpenApi" Version="2.3.0" /> -->
+
+		<PackageReference Include="Oracle.EntityFrameworkCore" Version="9.23.26000" />
+		<PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.0" />
+
+		<!-- 🔁 Usa a MESMA versão do projeto antigo, que você sabe que funciona -->
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+	</ItemGroup>
+
 
 </Project>
