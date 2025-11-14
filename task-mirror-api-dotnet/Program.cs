@@ -10,6 +10,11 @@ using TaskMirror.Auth;
 using TaskMirror.Data;
 using TaskMirror.Mapping;
 using TaskMirror.Services;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.Extensions.DependencyInjection;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,6 +57,34 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// =======================================
+// IA - Semantic Kernel + Ollama Cloud
+// =======================================
+#pragma warning disable SKEXP0010 // custom endpoint OpenAI-compatible
+
+builder.Services.AddSingleton<IChatCompletionService>(sp =>
+{
+    var kernelBuilder = Kernel.CreateBuilder();
+
+    var apiKey = Environment.GetEnvironmentVariable("OLLAMA_API_KEY")
+        ?? throw new InvalidOperationException("Defina a variável de ambiente OLLAMA_API_KEY com sua API key da Ollama.");
+
+    // Modelo cloud da Ollama
+    var modelId = "gpt-oss:120b-cloud";
+
+    kernelBuilder.AddOpenAIChatCompletion(
+        modelId: modelId,
+        apiKey: apiKey,
+        endpoint: new Uri("https://ollama.com/v1")
+    );
+
+    var kernel = kernelBuilder.Build();
+
+    // Pega o serviço de chat do kernel
+    return kernel.GetRequiredService<IChatCompletionService>();
+});
+
+#pragma warning restore SKEXP0010;
 // =====================================================
 // Controllers (evita ciclos na serialização)
 // =====================================================
@@ -90,6 +123,7 @@ builder.Services
 // Serviços de domínio
 // =====================================================
 builder.Services.AddScoped<TarefaService>();
+builder.Services.AddScoped<OllamaIaService>();
 
 // =====================================================
 // Auth: JWT + Authorization

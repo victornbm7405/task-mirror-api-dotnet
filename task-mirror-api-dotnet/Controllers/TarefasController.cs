@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -19,11 +20,13 @@ namespace TaskMirror.Controllers
     {
         private readonly TaskMirrorDbContext _db;
         private readonly TarefaService _service;
+        private readonly OllamaIaService _iaService; // 👈 IA para feedback
 
-        public TarefasController(TaskMirrorDbContext db, TarefaService service)
+        public TarefasController(TaskMirrorDbContext db, TarefaService service, OllamaIaService iaService)
         {
             _db = db;
             _service = service;
+            _iaService = iaService;
         }
 
         // ================= Helpers =================
@@ -245,7 +248,44 @@ namespace TaskMirror.Controllers
                 if (tarefa.IdUsuario != userId)
                     return Forbid();
 
-                return Ok(ToThinResponse(tarefa));
+                // ================================
+                // 🎯 GERAÇÃO DO FEEDBACK COM IA
+                // ================================
+                var tempoEstimado = tarefa.TempoEstimado ?? 0m;
+                var tempoReal = tarefa.TempoReal ?? 0m;
+
+                var descricao = tarefa.Descricao ?? "Tarefa sem descrição informada.";
+
+                var feedbackTexto = await _iaService.GerarFeedbackTarefaAsync(
+    tarefa.Descricao!,
+    tarefa.TempoEstimado ?? 0,
+    tarefa.TempoReal ?? 0
+);
+
+
+                // Cria registro de feedback no banco (1:1 com tarefa)
+                var feedback = new Feedback
+                {
+                    IdTarefa = tarefa.IdTarefa,
+                    Conteudo = feedbackTexto,
+                    DataGerado = DateTime.UtcNow
+                };
+
+                _db.Feedbacks.Add(feedback);
+                await _db.SaveChangesAsync();
+
+                var response = new
+                {
+                    tarefa = ToThinResponse(tarefa),
+                    feedback = new
+                    {
+                        idFeedback = feedback.IdFeedback,
+                        texto = feedback.Conteudo,
+                        dataGerado = feedback.DataGerado
+                    }
+                };
+
+                return Ok(response);
             }
             catch (InvalidOperationException ex)
             {

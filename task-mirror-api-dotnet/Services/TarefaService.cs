@@ -1,4 +1,4 @@
-using System;
+Ôªøusing System;
 using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -29,20 +29,20 @@ public class TarefaService
             .FirstOrDefaultAsync(x => x.Nome.ToUpper() == nomeNorm);
 
         if (s is null)
-            throw new InvalidOperationException($"Status '{nome}' n„o existe na tabela tbl_status_tarefa.");
+            throw new InvalidOperationException($"Status '{nome}' n√£o existe na tabela tbl_status_tarefa.");
         return s.IdStatusTarefa;
     }
 
     public async Task<Tarefa> CriarPorLiderAsync(Tarefa input)
     {
         var lider = await _db.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.IdUsuario == input.IdLider);
-        if (lider is null) throw new InvalidOperationException("LÌder informado n„o existe.");
+        if (lider is null) throw new InvalidOperationException("L√≠der informado n√£o existe.");
 
         var usuario = await _db.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.IdUsuario == input.IdUsuario);
-        if (usuario is null) throw new InvalidOperationException("Usu·rio (funcion·rio) informado n„o existe.");
+        if (usuario is null) throw new InvalidOperationException("Usu√°rio (funcion√°rio) informado n√£o existe.");
 
         if (usuario.IdLider != input.IdLider)
-            throw new InvalidOperationException("O usu·rio informado n„o È subordinado do lÌder informado.");
+            throw new InvalidOperationException("O usu√°rio informado n√£o √© subordinado do l√≠der informado.");
 
         input.IdStatusTarefa = await GetStatusIdAsync(StatusNames.Pendente);
         input.DataInicio = null;
@@ -60,7 +60,7 @@ public class TarefaService
         if (tarefa is null) return null;
 
         if (tarefa.IdUsuario != idUsuario)
-            throw new InvalidOperationException("Esta tarefa n„o pertence a este usu·rio.");
+            throw new InvalidOperationException("Esta tarefa n√£o pertence a este usu√°rio.");
 
         if (tarefa.DataInicio is null)
         {
@@ -78,13 +78,14 @@ public class TarefaService
         if (tarefa is null) return null;
 
         if (tarefa.IdUsuario != idUsuario)
-            throw new InvalidOperationException("Esta tarefa n„o pertence a este usu·rio.");
+            throw new InvalidOperationException("Esta tarefa n√£o pertence a este usu√°rio.");
 
         if (tarefa.DataInicio is null)
-            throw new InvalidOperationException("A tarefa ainda n„o foi iniciada.");
+            throw new InvalidOperationException("A tarefa ainda n√£o foi iniciada.");
 
         tarefa.DataFim = DateTime.UtcNow;
 
+        // ‚úÖ Agora TempoReal volta a ser salvo em MINUTOS (com 2 casas)
         var diffMin = (tarefa.DataFim.Value - tarefa.DataInicio.Value).TotalMinutes;
         tarefa.TempoReal = Math.Round(Convert.ToDecimal(diffMin, CultureInfo.InvariantCulture), 2);
 
