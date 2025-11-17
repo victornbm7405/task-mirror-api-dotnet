@@ -14,8 +14,6 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.Extensions.DependencyInjection;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
 
 // =====================================================
@@ -85,6 +83,7 @@ builder.Services.AddSingleton<IChatCompletionService>(sp =>
 });
 
 #pragma warning restore SKEXP0010;
+
 // =====================================================
 // Controllers (evita ciclos na serialização)
 // =====================================================
@@ -141,7 +140,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // dev
+    options.RequireHttpsMetadata = false; // dev/prod atrás de proxy
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -158,13 +157,15 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // =====================================================
-// Swagger
+// Swagger SEMPRE ATIVO (dev + produção)
 // =====================================================
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "TaskMirror API v1");
+    // Se quiser Swagger na raiz:
+    // c.RoutePrefix = string.Empty;
+});
 
 // =====================================================
 // Migrations + Seed (Oracle)
