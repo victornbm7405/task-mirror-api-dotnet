@@ -2,14 +2,18 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copia tudo do repo (dessa pasta do projeto)
-COPY . .
+# 1) Copia só o csproj da API para aproveitar cache
+COPY task-mirror-api-dotnet/task-mirror-api-dotnet.csproj ./task-mirror-api-dotnet/
 
-# Restaura dependências do projeto da API
-RUN dotnet restore ./task-mirror-api-dotnet.csproj
+# 2) Restaura dependências usando o caminho correto
+RUN dotnet restore ./task-mirror-api-dotnet/task-mirror-api-dotnet.csproj
 
-# Publica em Release
-RUN dotnet publish ./task-mirror-api-dotnet.csproj -c Release -o /app/out
+# 3) Copia o restante do código da API
+COPY task-mirror-api-dotnet/. ./task-mirror-api-dotnet/
+
+# 4) Entra na pasta do projeto e publica
+WORKDIR /src/task-mirror-api-dotnet
+RUN dotnet publish task-mirror-api-dotnet.csproj -c Release -o /app/out /p:UseAppHost=false
 
 # ===== runtime =====
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
