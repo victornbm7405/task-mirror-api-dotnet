@@ -125,27 +125,15 @@ namespace TaskMirror.Controllers
         [HttpGet("tempo-medio-finalizadas")]
         public async Task<ActionResult> GetTempoMedioTarefasFinalizadas()
         {
-            // Busca o ID do status "Finalizado"
-            var idStatusFinalizado = await _db.StatusTarefas
-                .AsNoTracking()
-                .Where(s => s.Nome == "Finalizado")
-                .Select(s => s.IdStatusTarefa)
-                .FirstOrDefaultAsync();
-
-            // Se não existir status "Finalizado" cadastrado
-            if (idStatusFinalizado == 0)
-            {
-                return Ok(new
-                {
-                    mediaMinutos = 0,
-                    totalFinalizadas = 0
-                });
-            }
-
-            // Filtra tarefas finalizadas com TempoReal preenchido
+            // Filtra diretamente pelas tarefas com status "Finalizado" e TempoReal preenchido
             var query = _db.Tarefas
                 .AsNoTracking()
-                .Where(t => t.IdStatusTarefa == idStatusFinalizado && t.TempoReal.HasValue);
+                .Include(t => t.StatusTarefa)
+                .Where(t =>
+                    t.StatusTarefa != null &&
+                    t.StatusTarefa.Nome == "Finalizado" &&
+                    t.TempoReal.HasValue
+                );
 
             var totalFinalizadas = await query.CountAsync();
 
