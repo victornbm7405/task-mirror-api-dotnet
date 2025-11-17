@@ -25,7 +25,11 @@ public class TiposTarefaController : ControllerBase
         _mapper = mapper;
     }
 
-    // GET: api/v1/tipos-tarefa
+    /// <summary>
+    /// Lista todos os tipos de tarefa com paginação.
+    /// </summary>
+    /// <param name="page">Número da página (padrão = 1).</param>
+    /// <param name="pageSize">Tamanho da página (padrão = 10, máx = 50).</param>
     [HttpGet]
     public async Task<ActionResult> GetAll(
         [FromQuery] int page = 1,
@@ -59,5 +63,32 @@ public class TiposTarefaController : ControllerBase
         };
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Retorna a quantidade de tarefas por tipo de tarefa.
+    /// Exemplo de resposta:
+    /// [
+    ///   { "idTipoTarefa": 1, "nome": "Reunião", "quantidade": 3 }
+    /// ]
+    /// </summary>
+    [HttpGet("resumo")]
+    public async Task<ActionResult<IEnumerable<TipoTarefaResumoDto>>> GetResumoPorTipo()
+    {
+        var resumo = await _db.TiposTarefa
+            .GroupJoin(
+                _db.Tarefas,
+                tipo => tipo.IdTipoTarefa,
+                tarefa => tarefa.IdTipoTarefa,
+                (tipo, tarefas) => new TipoTarefaResumoDto(
+                    tipo.IdTipoTarefa,
+                    tipo.Nome,
+                    tarefas.Count()
+                )
+            )
+            .AsNoTracking()
+            .ToListAsync();
+
+        return Ok(resumo);
     }
 }

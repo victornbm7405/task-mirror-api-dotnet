@@ -120,6 +120,53 @@ namespace TaskMirror.Controllers
             return Ok(result);
         }
 
+        // 🔢 MÉTRICA: tempo médio em minutos das tarefas FINALIZADAS
+        // GET: api/v1/tarefas/tempo-medio-finalizadas
+        [HttpGet("tempo-medio-finalizadas")]
+        public async Task<ActionResult> GetTempoMedioTarefasFinalizadas()
+        {
+            // Busca o ID do status "Finalizado"
+            var idStatusFinalizado = await _db.StatusTarefas
+                .AsNoTracking()
+                .Where(s => s.Nome == "Finalizado")
+                .Select(s => s.IdStatusTarefa)
+                .FirstOrDefaultAsync();
+
+            // Se não existir status "Finalizado" cadastrado
+            if (idStatusFinalizado == 0)
+            {
+                return Ok(new
+                {
+                    mediaMinutos = 0,
+                    totalFinalizadas = 0
+                });
+            }
+
+            // Filtra tarefas finalizadas com TempoReal preenchido
+            var query = _db.Tarefas
+                .AsNoTracking()
+                .Where(t => t.IdStatusTarefa == idStatusFinalizado && t.TempoReal.HasValue);
+
+            var totalFinalizadas = await query.CountAsync();
+
+            if (totalFinalizadas == 0)
+            {
+                return Ok(new
+                {
+                    mediaMinutos = 0,
+                    totalFinalizadas = 0
+                });
+            }
+
+            var media = await query.AverageAsync(t => t.TempoReal!.Value);
+
+            return Ok(new
+            {
+                mediaMinutos = Math.Round(media, 2),
+                totalFinalizadas
+            });
+        }
+
         // GET: api/v1/tarefas/5  (detalhe enxuto)
         // LIDER -> pode ver qualquer
         // USER  -> só se for tarefa dele
@@ -257,11 +304,10 @@ namespace TaskMirror.Controllers
                 var descricao = tarefa.Descricao ?? "Tarefa sem descrição informada.";
 
                 var feedbackTexto = await _iaService.GerarFeedbackTarefaAsync(
-    tarefa.Descricao!,
-    tarefa.TempoEstimado ?? 0,
-    tarefa.TempoReal ?? 0
-);
-
+                    tarefa.Descricao!,
+                    tarefa.TempoEstimado ?? 0,
+                    tarefa.TempoReal ?? 0
+                );
 
                 // Cria registro de feedback no banco (1:1 com tarefa)
                 var feedback = new Feedback
