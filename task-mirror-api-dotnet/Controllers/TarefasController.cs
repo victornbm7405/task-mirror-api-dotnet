@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,7 +21,7 @@ namespace TaskMirror.Controllers
     {
         private readonly TaskMirrorDbContext _db;
         private readonly TarefaService _service;
-        private readonly OllamaIaService _iaService; // 👈 IA para feedback
+        private readonly OllamaIaService _iaService; // 👈 IA para feedback/previsão
 
         public TarefasController(TaskMirrorDbContext db, TarefaService service, OllamaIaService iaService)
         {
@@ -208,9 +209,10 @@ namespace TaskMirror.Controllers
                     // Status/DataInicio/TempoReal/DataFim são definidos no service
                 };
 
+                // 1) Cria a tarefa (status Pendente, etc.)
                 var tarefa = await _service.CriarPorLiderAsync(entity);
 
-                // Recarrega com includes para resposta enxuta
+                // 2) Recarrega com includes para resposta enxuta
                 tarefa = await _db.Tarefas
                     .Include(t => t.Usuario)
                     .Include(t => t.Lider)
@@ -218,7 +220,94 @@ namespace TaskMirror.Controllers
                     .Include(t => t.StatusTarefa)
                     .FirstAsync(t => t.IdTarefa == tarefa.IdTarefa);
 
-                return CreatedAtAction(nameof(GetById), new { idTarefa = tarefa.IdTarefa }, ToThinResponse(tarefa));
+                // ================================
+                // 🔮 PREVISÃO DE ATRASO COM IA
+                // ================================
+                string? previsaoTexto = null;
+                bool possuiHistorico = false;
+                int qtdHistorico = 0;
+
+                try
+                {
+                    // Só faz sentido se tiver usuário associado e status Pendente
+                    if (tarefa.Usuario != null &&
+                        tarefa.StatusTarefa != null &&
+                        tarefa.StatusTarefa.Nome == StatusNames.Pendente)
+                    {
+                        var usuario = tarefa.Usuario;
+
+                        // histórico de tarefas finalizadas do usuário (sem a tarefa atual)
+                        var historico = await _db.Tarefas
+                            .AsNoTracking()
+                            .Include(t => t.TipoTarefa)
+                            .Where(t =>
+                                t.IdUsuario == usuario.IdUsuario &&
+                                t.IdTarefa != tarefa.IdTarefa &&
+                                t.DataFim != null &&
+                                t.TempoEstimado != null &&
+                                t.TempoReal != null)
+                            .OrderByDescending(t => t.DataFim)
+                            .Take(20)
+                            .ToListAsync();
+
+                        possuiHistorico = historico.Any();
+                        qtdHistorico = historico.Count;
+
+                        var sb = new StringBuilder();
+                        if (historico.Any())
+                        {
+                            foreach (var h in historico)
+                            {
+                                var tipo = h.TipoTarefa != null
+                                    ? h.TipoTarefa.Nome
+                                    : "Não informado";
+
+                                sb.AppendLine($"Tarefa: {h.Descricao ?? "(sem descrição)"}");
+                                sb.AppendLine($"Tipo: {tipo}");
+                                sb.AppendLine($"Tempo estimado: {h.TempoEstimado} min | Tempo real: {h.TempoReal} min");
+                                sb.AppendLine();
+                            }
+                        }
+
+                        var historicoTexto = historico.Any()
+                            ? sb.ToString()
+                            : "Nenhum histórico anterior disponível. Considere apenas os dados da tarefa atual.";
+
+                        var descricaoAtual = tarefa.Descricao ?? "Tarefa sem descrição.";
+                        var tempoEstimadoAtual = tarefa.TempoEstimado ?? 0m;
+                        var tipoAtual = tarefa.TipoTarefa?.Nome;
+
+                        previsaoTexto = await _iaService.GerarPrevisaoAtrasoAsync(
+                            usuario.Username,
+                            descricaoAtual,
+                            tempoEstimadoAtual,
+                            tipoAtual,
+                            historicoTexto
+                        );
+                    }
+                }
+                catch
+                {
+                    // Se der erro na IA, não quebra o fluxo de criação.
+                    previsaoTexto = null;
+                    possuiHistorico = false;
+                    qtdHistorico = 0;
+                }
+
+                var response = new
+                {
+                    tarefa = ToThinResponse(tarefa),
+                    ia = previsaoTexto == null
+                        ? null
+                        : new
+                        {
+                            previsao = previsaoTexto,
+                            possuiHistorico,
+                            quantidadeTarefasHistorico = qtdHistorico
+                        }
+                };
+
+                return CreatedAtAction(nameof(GetById), new { idTarefa = tarefa.IdTarefa }, response);
             }
             catch (InvalidOperationException ex)
             {
@@ -292,9 +381,9 @@ namespace TaskMirror.Controllers
                 var descricao = tarefa.Descricao ?? "Tarefa sem descrição informada.";
 
                 var feedbackTexto = await _iaService.GerarFeedbackTarefaAsync(
-                    tarefa.Descricao!,
-                    tarefa.TempoEstimado ?? 0,
-                    tarefa.TempoReal ?? 0
+                    descricao,
+                    tempoEstimado,
+                    tempoReal
                 );
 
                 // Cria registro de feedback no banco (1:1 com tarefa)
