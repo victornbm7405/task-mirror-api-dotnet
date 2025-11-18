@@ -125,6 +125,22 @@ builder.Services.AddScoped<TarefaService>();
 builder.Services.AddScoped<OllamaIaService>();
 
 // =====================================================
+// CORS (libera origens pro front consumir a API)
+// =====================================================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("cors", policy =>
+    {
+        policy
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            // DEV: aceita qualquer origin (localhost, IP da rede, etc.)
+            .SetIsOriginAllowed(_ => true)
+            .AllowCredentials();
+    });
+});
+
+// =====================================================
 // Auth: JWT + Authorization
 // =====================================================
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -191,6 +207,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseHttpsRedirection();
+
+// CORS precisa vir ANTES de Auth
+app.UseCors("cors");
 
 // Auth
 app.UseAuthentication();
